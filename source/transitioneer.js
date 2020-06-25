@@ -3,25 +3,25 @@ import { TransformTo } from "./transformto.js";
 
 import common_methods from "./common_methods.js";
 
-const Transitioneer = (function() {
+const Transitioneer = (function () {
 
     let obj_map = new Map();
     let ActiveTransition = null;
 
     function $in(...data) {
-        
+
         let
             seq = null,
             length = data.length,
             delay = 0;
 
-        if (typeof(data[length - 1]) == "number")
+        if (typeof (data[length - 1]) == "number")
             delay = data[length - 1], length--;
 
         for (let i = 0; i < length; i++) {
             let anim_data = data[i];
 
-            if (typeof(anim_data) == "object") {
+            if (typeof (anim_data) == "object") {
 
                 if (anim_data.match && this.TT[anim_data.match]) {
                     let
@@ -58,13 +58,11 @@ const Transitioneer = (function() {
         //Every time an animating component is added to the Animation stack delay and duration need to be calculated.
         //The highest in_delay value will determine how much time is afforded before the animations for the in portion are started.
         let
-            seq = null,
             length = data.length,
-            delay = 0,
-            in_delay = 0;
+            delay = 0;
 
-        if (typeof(data[length - 1]) == "number") {
-            if (typeof(data[length - 2]) == "number") {
+        if (typeof (data[length - 1]) == "number") {
+            if (typeof (data[length - 2]) == "number") {
                 in_delay = data[length - 2];
                 delay = data[length - 1];
                 length -= 2;
@@ -75,7 +73,7 @@ const Transitioneer = (function() {
         for (let i = 0; i < length; i++) {
             let anim_data = data[i];
 
-            if (typeof(anim_data) == "object") {
+            if (typeof (anim_data) == "object") {
 
                 if (anim_data.match) {
                     this.TT[anim_data.match] = TransformTo(anim_data.obj);
@@ -121,7 +119,7 @@ const Transitioneer = (function() {
             this.out = $out.bind(this);
             this.out.addEventListener = this.addEventListener.bind(this);
             this.out.removeEventListener = this.removeEventListener.bind(this);
-            
+
             this.in = $in.bind(this);
             this.in.addEventListener = this.addEventListener.bind(this);
             this.in.removeEventListener = this.removeEventListener.bind(this);
@@ -134,7 +132,7 @@ const Transitioneer = (function() {
         }
 
         destroy() {
-            let removeProps = function(seq) {
+            let removeProps = function (seq) {
                 if (!seq.DESTROYED) {
                     if (obj_map.get(seq.obj) == seq)
                         obj_map.delete(seq.obj);
@@ -155,7 +153,7 @@ const Transitioneer = (function() {
             return Math.max(this.in_duration + this.in_delay, this.out_duration);
         }
 
-        set duration(e){};
+        set duration(e) { };
 
         run(t) {
 
