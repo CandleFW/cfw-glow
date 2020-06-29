@@ -14,154 +14,6 @@ var glow = (function () {
         }
     }
 
-    /**
-     * Used to call the Scheduler after a JavaScript runtime tick.
-     *
-     * Depending on the platform, caller will either map to requestAnimationFrame or it will be a setTimout.
-     */
-     
-    const caller = (typeof(window) == "object" && window.requestAnimationFrame) ? window.requestAnimationFrame : (f) => {
-        setTimeout(f, 1);
-    };
-
-    const perf = (typeof(performance) == "undefined") ? { now: () => Date.now() } : performance;
-
-
-    /**
-     * Handles updating objects. It does this by splitting up update cycles, to respect the browser event model. 
-     *    
-     * If any object is scheduled to be updated, it will be blocked from scheduling more updates until the next ES VM tick.
-     */
-    class Spark {
-        /**
-         * Constructs the object.
-         */
-        constructor() {
-
-            this.update_queue_a = [];
-            this.update_queue_b = [];
-
-            this.update_queue = this.update_queue_a;
-
-            this.queue_switch = 0;
-
-            this.callback = ()=>{};
-
-
-            if(typeof(window) !== "undefined"){
-                window.addEventListener("load",()=>{
-                    this.callback = () => this.update();
-                    caller(this.callback);
-                });
-            }else{
-                this.callback = () => this.update();
-            }
-
-
-            this.frame_time = perf.now();
-
-            this.SCHEDULE_PENDING = false;
-        }
-
-        /**
-         * Given an object that has a _SCHD_ Boolean property, the Scheduler will queue the object and call its .update function 
-         * the following tick. If the object does not have a _SCHD_ property, the Scheduler will persuade the object to have such a property.
-         * 
-         * If there are currently no queued objects when this is called, then the Scheduler will user caller to schedule an update.
-         */
-        queueUpdate(object, timestart = 1, timeend = 0) {
-
-            if (object._SCHD_ || object._SCHD_ > 0) {
-                if (this.SCHEDULE_PENDING)
-                    return;
-                else
-                    return caller(this.callback);
-            }
-
-            object._SCHD_ = ((timestart & 0xFFFF) | ((timeend) << 16));
-
-            this.update_queue.push(object);
-
-            if (this._SCHD_)
-                return;
-
-            this.frame_time = perf.now() | 0;
-
-
-            if(!this.SCHEDULE_PENDING){
-                this.SCHEDULE_PENDING = true;
-                caller(this.callback);
-            }
-        }
-
-        removeFromQueue(object){
-
-            if(object._SCHD_)
-                for(let i = 0, l = this.update_queue.length; i < l; i++)
-                    if(this.update_queue[i] === object){
-                        this.update_queue.splice(i,1);
-                        object._SCHD_ = 0;
-
-                        if(l == 1)
-                            this.SCHEDULE_PENDING = false;
-
-                        return;
-                    }
-        }
-
-        /**
-         * Called by the caller function every tick. Calls .update on any object queued for an update. 
-         */
-        update() {
-
-            this.SCHEDULE_PENDING = false;
-
-            const uq = this.update_queue;
-            const time = perf.now() | 0;
-            const diff = Math.ceil(time - this.frame_time) | 1;
-            const step_ratio = (diff * 0.06); //  step_ratio of 1 = 16.66666666 or 1000 / 60 for 60 FPS
-
-            this.frame_time = time;
-            
-            if (this.queue_switch == 0)
-                (this.update_queue = this.update_queue_b, this.queue_switch = 1);
-            else
-                (this.update_queue = this.update_queue_a, this.queue_switch = 0);
-
-            for (let i = 0, l = uq.length, o = uq[0]; i < l; o = uq[++i]) {
-                let timestart = ((o._SCHD_ & 0xFFFF)) - diff;
-                let timeend = ((o._SCHD_ >> 16) & 0xFFFF);
-
-                o._SCHD_ = 0;
-                
-                if (timestart > 0) {
-                    this.queueUpdate(o, timestart, timeend);
-                    continue;
-                }
-
-                timestart = 0;
-
-                if (timeend > 0) 
-                    this.queueUpdate(o, timestart, timeend - diff);
-
-                /** 
-                    To ensure on code path doesn't block any others, 
-                    scheduledUpdate methods are called within a try catch block. 
-                    Errors by default are printed to console. 
-                **/
-                try {
-                    o.scheduledUpdate(step_ratio, diff);
-                } catch (e) {
-                    console.error(e);
-                }
-            }
-
-            uq.length = 0;
-        }
-    }
-
-    const spark = new Spark();
-
     const uni_id_start = [170, 181, 186, 748, 750, 895, 902, 908, 1369, 1749, 1791, 1808, 1969, 2042, 2074, 2084, 2088, 2365, 2384, 2482, 2493, 2510, 2556, 2654, 2749, 2768, 2809, 2877, 2929, 2947, 2972, 3024, 3133, 3200, 3261, 3294, 3389, 3406, 3517, 3716, 3749, 3773, 3782, 3840, 4159, 4193, 4238, 4295, 4301, 4696, 4800, 6103, 6108, 6314, 6823, 7418, 8025, 8027, 8029, 8126, 8305, 8319, 8450, 8455, 8469, 8484, 8486, 8488, 8526, 11559, 11565, 11631, 11823, 13312, 19893, 19968, 40943, 43259, 43471, 43642, 43697, 43712, 43714, 44032, 55203, 64285, 64318, 67592, 67644, 68096, 69415, 69956, 70006, 70106, 70108, 70280, 70461, 70480, 70751, 70855, 71236, 71352, 71935, 72161, 72163, 72192, 72250, 72272, 72349, 72768, 73030, 73112, 94032, 94179, 94208, 100343, 119970, 119995, 120134, 123214, 125259, 126500, 126503, 126521, 126523, 126530, 126535, 126537, 126539, 126548, 126551, 126553, 126555, 126557, 126559, 126564, 126590, 131072, 173782, 173824, 177972, 177984, 178205, 178208, 183969, 183984, 191456];
     const uni_id_start_r = [65, 90, 97, 122, 192, 214, 216, 246, 248, 705, 710, 721, 736, 740, 880, 884, 886, 887, 890, 893, 904, 906, 910, 929, 931, 1013, 1015, 1153, 1162, 1327, 1329, 1366, 1376, 1416, 1488, 1514, 1519, 1522, 1568, 1610, 1646, 1647, 1649, 1747, 1765, 1766, 1774, 1775, 1786, 1788, 1810, 1839, 1869, 1957, 1994, 2026, 2036, 2037, 2048, 2069, 2112, 2136, 2144, 2154, 2208, 2228, 2230, 2237, 2308, 2361, 2392, 2401, 2417, 2432, 2437, 2444, 2447, 2448, 2451, 2472, 2474, 2480, 2486, 2489, 2524, 2525, 2527, 2529, 2544, 2545, 2565, 2570, 2575, 2576, 2579, 2600, 2602, 2608, 2610, 2611, 2613, 2614, 2616, 2617, 2649, 2652, 2674, 2676, 2693, 2701, 2703, 2705, 2707, 2728, 2730, 2736, 2738, 2739, 2741, 2745, 2784, 2785, 2821, 2828, 2831, 2832, 2835, 2856, 2858, 2864, 2866, 2867, 2869, 2873, 2908, 2909, 2911, 2913, 2949, 2954, 2958, 2960, 2962, 2965, 2969, 2970, 2974, 2975, 2979, 2980, 2984, 2986, 2990, 3001, 3077, 3084, 3086, 3088, 3090, 3112, 3114, 3129, 3160, 3162, 3168, 3169, 3205, 3212, 3214, 3216, 3218, 3240, 3242, 3251, 3253, 3257, 3296, 3297, 3313, 3314, 3333, 3340, 3342, 3344, 3346, 3386, 3412, 3414, 3423, 3425, 3450, 3455, 3461, 3478, 3482, 3505, 3507, 3515, 3520, 3526, 3585, 3632, 3634, 3635, 3648, 3654, 3713, 3714, 3718, 3722, 3724, 3747, 3751, 3760, 3762, 3763, 3776, 3780, 3804, 3807, 3904, 3911, 3913, 3948, 3976, 3980, 4096, 4138, 4176, 4181, 4186, 4189, 4197, 4198, 4206, 4208, 4213, 4225, 4256, 4293, 4304, 4346, 4348, 4680, 4682, 4685, 4688, 4694, 4698, 4701, 4704, 4744, 4746, 4749, 4752, 4784, 4786, 4789, 4792, 4798, 4802, 4805, 4808, 4822, 4824, 4880, 4882, 4885, 4888, 4954, 4992, 5007, 5024, 5109, 5112, 5117, 5121, 5740, 5743, 5759, 5761, 5786, 5792, 5866, 5870, 5880, 5888, 5900, 5902, 5905, 5920, 5937, 5952, 5969, 5984, 5996, 5998, 6000, 6016, 6067, 6176, 6264, 6272, 6276, 6279, 6312, 6320, 6389, 6400, 6430, 6480, 6509, 6512, 6516, 6528, 6571, 6576, 6601, 6656, 6678, 6688, 6740, 6917, 6963, 6981, 6987, 7043, 7072, 7086, 7087, 7098, 7141, 7168, 7203, 7245, 7247, 7258, 7293, 7296, 7304, 7312, 7354, 7357, 7359, 7401, 7404, 7406, 7411, 7413, 7414, 7424, 7615, 7680, 7957, 7960, 7965, 7968, 8005, 8008, 8013, 8016, 8023, 8031, 8061, 8064, 8116, 8118, 8124, 8130, 8132, 8134, 8140, 8144, 8147, 8150, 8155, 8160, 8172, 8178, 8180, 8182, 8188, 8336, 8348, 8458, 8467, 8473, 8477, 8490, 8493, 8495, 8505, 8508, 8511, 8517, 8521, 8544, 8584, 11264, 11310, 11312, 11358, 11360, 11492, 11499, 11502, 11506, 11507, 11520, 11557, 11568, 11623, 11648, 11670, 11680, 11686, 11688, 11694, 11696, 11702, 11704, 11710, 11712, 11718, 11720, 11726, 11728, 11734, 11736, 11742, 12293, 12295, 12321, 12329, 12337, 12341, 12344, 12348, 12353, 12438, 12445, 12447, 12449, 12538, 12540, 12543, 12549, 12591, 12593, 12686, 12704, 12730, 12784, 12799, 40960, 42124, 42192, 42237, 42240, 42508, 42512, 42527, 42538, 42539, 42560, 42606, 42623, 42653, 42656, 42735, 42775, 42783, 42786, 42888, 42891, 42943, 42946, 42950, 42999, 43009, 43011, 43013, 43015, 43018, 43020, 43042, 43072, 43123, 43138, 43187, 43250, 43255, 43261, 43262, 43274, 43301, 43312, 43334, 43360, 43388, 43396, 43442, 43488, 43492, 43494, 43503, 43514, 43518, 43520, 43560, 43584, 43586, 43588, 43595, 43616, 43638, 43646, 43695, 43701, 43702, 43705, 43709, 43739, 43741, 43744, 43754, 43762, 43764, 43777, 43782, 43785, 43790, 43793, 43798, 43808, 43814, 43816, 43822, 43824, 43866, 43868, 43879, 43888, 44002, 55216, 55238, 55243, 55291, 63744, 64109, 64112, 64217, 64256, 64262, 64275, 64279, 64287, 64296, 64298, 64310, 64312, 64316, 64320, 64321, 64323, 64324, 64326, 64433, 64467, 64829, 64848, 64911, 64914, 64967, 65008, 65019, 65136, 65140, 65142, 65276, 65313, 65338, 65345, 65370, 65382, 65470, 65474, 65479, 65482, 65487, 65490, 65495, 65498, 65500, 65536, 65547, 65549, 65574, 65576, 65594, 65596, 65597, 65599, 65613, 65616, 65629, 65664, 65786, 65856, 65908, 66176, 66204, 66208, 66256, 66304, 66335, 66349, 66378, 66384, 66421, 66432, 66461, 66464, 66499, 66504, 66511, 66513, 66517, 66560, 66717, 66736, 66771, 66776, 66811, 66816, 66855, 66864, 66915, 67072, 67382, 67392, 67413, 67424, 67431, 67584, 67589, 67594, 67637, 67639, 67640, 67647, 67669, 67680, 67702, 67712, 67742, 67808, 67826, 67828, 67829, 67840, 67861, 67872, 67897, 67968, 68023, 68030, 68031, 68112, 68115, 68117, 68119, 68121, 68149, 68192, 68220, 68224, 68252, 68288, 68295, 68297, 68324, 68352, 68405, 68416, 68437, 68448, 68466, 68480, 68497, 68608, 68680, 68736, 68786, 68800, 68850, 68864, 68899, 69376, 69404, 69424, 69445, 69600, 69622, 69635, 69687, 69763, 69807, 69840, 69864, 69891, 69926, 69968, 70002, 70019, 70066, 70081, 70084, 70144, 70161, 70163, 70187, 70272, 70278, 70282, 70285, 70287, 70301, 70303, 70312, 70320, 70366, 70405, 70412, 70415, 70416, 70419, 70440, 70442, 70448, 70450, 70451, 70453, 70457, 70493, 70497, 70656, 70708, 70727, 70730, 70784, 70831, 70852, 70853, 71040, 71086, 71128, 71131, 71168, 71215, 71296, 71338, 71424, 71450, 71680, 71723, 71840, 71903, 72096, 72103, 72106, 72144, 72203, 72242, 72284, 72329, 72384, 72440, 72704, 72712, 72714, 72750, 72818, 72847, 72960, 72966, 72968, 72969, 72971, 73008, 73056, 73061, 73063, 73064, 73066, 73097, 73440, 73458, 73728, 74649, 74752, 74862, 74880, 75075, 77824, 78894, 82944, 83526, 92160, 92728, 92736, 92766, 92880, 92909, 92928, 92975, 92992, 92995, 93027, 93047, 93053, 93071, 93760, 93823, 93952, 94026, 94099, 94111, 94176, 94177, 100352, 101106, 110592, 110878, 110928, 110930, 110948, 110951, 110960, 111355, 113664, 113770, 113776, 113788, 113792, 113800, 113808, 113817, 119808, 119892, 119894, 119964, 119966, 119967, 119973, 119974, 119977, 119980, 119982, 119993, 119997, 120003, 120005, 120069, 120071, 120074, 120077, 120084, 120086, 120092, 120094, 120121, 120123, 120126, 120128, 120132, 120138, 120144, 120146, 120485, 120488, 120512, 120514, 120538, 120540, 120570, 120572, 120596, 120598, 120628, 120630, 120654, 120656, 120686, 120688, 120712, 120714, 120744, 120746, 120770, 120772, 120779, 123136, 123180, 123191, 123197, 123584, 123627, 124928, 125124, 125184, 125251, 126464, 126467, 126469, 126495, 126497, 126498, 126505, 126514, 126516, 126519, 126541, 126543, 126545, 126546, 126561, 126562, 126567, 126570, 126572, 126578, 126580, 126583, 126585, 126588, 126592, 126601, 126603, 126619, 126625, 126627, 126629, 126633, 126635, 126651];
     const uni_id_cont = [95, 1471, 1479, 1648, 1809, 2045, 2492, 2519, 2558, 2620, 2641, 2677, 2748, 2876, 2946, 3031, 3260, 3415, 3530, 3542, 3633, 3761, 3893, 3895, 3897, 4038, 6109, 6313, 7405, 7412, 8276, 8417, 11647, 42607, 43010, 43014, 43019, 43493, 43587, 43696, 43713, 64286, 65343, 66045, 66272, 68159, 70003, 70206, 70487, 70750, 72164, 72263, 73018, 73031, 94031, 121461, 121476];
@@ -2101,7 +1953,13 @@ var glow = (function () {
     URL.polyfill = async function () {
         if (typeof (global) !== "undefined" && !POLLYFILLED) {
             POLLYFILLED = true;
-            const fsr = (await import('fs')), fs = fsr.promises, path = (await import('path')), http = (await import('http')), 
+            const 
+            //@ts-ignore
+            fsr = (await import('fs')), fs = fsr.promises, 
+            //@ts-ignore
+            path = (await import('path')), 
+            //@ts-ignore
+            http = (await import('http')), 
             //@ts-ignore
             g = global;
             URL.GLOBAL = new URL(process.cwd() + "/");
@@ -4520,10 +4378,239 @@ var glow = (function () {
         fontname: CSS_FontName
     };
 
-    /** SHARED METHODS **/
+    /**
+     * Used to call the Scheduler after a JavaScript runtime tick.
+     *
+     * Depending on the platform, caller will either map to requestAnimationFrame or it will be a setTimout.
+     */
+     
+    const caller = (typeof(window) == "object" && window.requestAnimationFrame) ? window.requestAnimationFrame : (f) => {
+        setTimeout(f, 1);
+    };
+
+    const perf = (typeof(performance) == "undefined") ? { now: () => Date.now() } : performance;
+
+
+    /**
+     * Handles updating objects. It does this by splitting up update cycles, to respect the browser event model. 
+     *    
+     * If any object is scheduled to be updated, it will be blocked from scheduling more updates until the next ES VM tick.
+     */
+    class Spark {
+        /**
+         * Constructs the object.
+         */
+        constructor() {
+
+            this.update_queue_a = [];
+            this.update_queue_b = [];
+
+            this.update_queue = this.update_queue_a;
+
+            this.queue_switch = 0;
+
+            this.callback = ()=>{};
+
+
+            if(typeof(window) !== "undefined"){
+                window.addEventListener("load",()=>{
+                    this.callback = () => this.update();
+                    caller(this.callback);
+                });
+            }else{
+                this.callback = () => this.update();
+            }
+
+
+            this.frame_time = perf.now();
+
+            this.SCHEDULE_PENDING = false;
+        }
+
+        /**
+         * Given an object that has a _SCHD_ Boolean property, the Scheduler will queue the object and call its .update function 
+         * the following tick. If the object does not have a _SCHD_ property, the Scheduler will persuade the object to have such a property.
+         * 
+         * If there are currently no queued objects when this is called, then the Scheduler will user caller to schedule an update.
+         */
+        queueUpdate(object, timestart = 1, timeend = 0) {
+
+            if (object._SCHD_ || object._SCHD_ > 0) {
+                if (this.SCHEDULE_PENDING)
+                    return;
+                else
+                    return caller(this.callback);
+            }
+
+            object._SCHD_ = ((timestart & 0xFFFF) | ((timeend) << 16));
+
+            this.update_queue.push(object);
+
+            if (this._SCHD_)
+                return;
+
+            this.frame_time = perf.now() | 0;
+
+
+            if(!this.SCHEDULE_PENDING){
+                this.SCHEDULE_PENDING = true;
+                caller(this.callback);
+            }
+        }
+
+        removeFromQueue(object){
+
+            if(object._SCHD_)
+                for(let i = 0, l = this.update_queue.length; i < l; i++)
+                    if(this.update_queue[i] === object){
+                        this.update_queue.splice(i,1);
+                        object._SCHD_ = 0;
+
+                        if(l == 1)
+                            this.SCHEDULE_PENDING = false;
+
+                        return;
+                    }
+        }
+
+        /**
+         * Called by the caller function every tick. Calls .update on any object queued for an update. 
+         */
+        update() {
+
+            this.SCHEDULE_PENDING = false;
+
+            const uq = this.update_queue;
+            const time = perf.now() | 0;
+            const diff = Math.ceil(time - this.frame_time) | 1;
+            const step_ratio = (diff * 0.06); //  step_ratio of 1 = 16.66666666 or 1000 / 60 for 60 FPS
+
+            this.frame_time = time;
+            
+            if (this.queue_switch == 0)
+                (this.update_queue = this.update_queue_b, this.queue_switch = 1);
+            else
+                (this.update_queue = this.update_queue_a, this.queue_switch = 0);
+
+            for (let i = 0, l = uq.length, o = uq[0]; i < l; o = uq[++i]) {
+                let timestart = ((o._SCHD_ & 0xFFFF)) - diff;
+                let timeend = ((o._SCHD_ >> 16) & 0xFFFF);
+
+                o._SCHD_ = 0;
+                
+                if (timestart > 0) {
+                    this.queueUpdate(o, timestart, timeend);
+                    continue;
+                }
+
+                timestart = 0;
+
+                if (timeend > 0) 
+                    this.queueUpdate(o, timestart, timeend - diff);
+
+                /** 
+                    To ensure on code path doesn't block any others, 
+                    scheduledUpdate methods are called within a try catch block. 
+                    Errors by default are printed to console. 
+                **/
+                try {
+                    o.scheduledUpdate(step_ratio, diff);
+                } catch (e) {
+                    console.error(e);
+                }
+            }
+
+            uq.length = 0;
+        }
+    }
+
+    const spark = new Spark();
 
     var common_methods = {
-
+        await: async function () {
+            return this.observeStop();
+        },
+        shuttle(SHUTTLE = true) {
+            this.SHUTTLE = !!SHUTTLE;
+            return this;
+        },
+        set(i) {
+            if (i >= 0)
+                this.run(i * this.duration);
+            else
+                this.run(this.duration - i * this.duration);
+            return this;
+        },
+        step(i) { return this.set(i); },
+        play(scale = 1, from = 0) {
+            this.PLAY = true;
+            this.SCALE = scale;
+            this.time = from;
+            spark.queueUpdate(this);
+            this.issueEvent("started");
+            return this;
+        },
+        async asyncPlay(scale, from) {
+            this.play(scale, from);
+            return this.observeStop();
+        },
+        stop() {
+            //There may be a need to kill any existing CSS based animations
+            this.PLAY = false;
+            return this;
+        },
+        repeat(count = 1) {
+            this.REPEAT = Math.max(0, parseFloat(count));
+            return this;
+        },
+        addEventListener(event, listener) {
+            if (typeof (listener) === "function") {
+                if (!this.events[event])
+                    this.events[event] = [];
+                this.events[event].push(listener);
+            }
+        },
+        removeEventListener(event, listener) {
+            if (typeof (listener) === "function") {
+                const events = this.events[event];
+                if (events)
+                    for (let i = 0; i < events.length; i++)
+                        if (events[i] === listener)
+                            return (events.splice(i, 1), true);
+            }
+            return false;
+        },
+        issueEvent(event) {
+            if (this.events[event])
+                this.events[event] = this.events[event].filter(e => e(this) !== false);
+        },
+        async observeStop() {
+            return (new Promise(res => {
+                if (this.duration > 0)
+                    this.scheduledUpdate(0, 0);
+                if (this.duration < 1)
+                    return res();
+                this.addEventListener("stopped", () => (res(), false));
+            }));
+        },
+        scheduledUpdate(a, t) {
+            if (!this.PLAY)
+                return;
+            this.time += t * this.SCALE;
+            if (this.run(this.time)) {
+                spark.queueUpdate(this);
+            }
+            else if (this.REPEAT) {
+                let scale = this.SCALE;
+                this.REPEAT--;
+                if (this.SHUTTLE)
+                    scale = -scale;
+                let from = (scale > 0) ? 0 : this.duration;
+                this.play(scale, from);
+            }
+            else
+                this.issueEvent("stopped");
+        },
         constructCommon() {
             this.time = 0;
             this.duration = 0;
@@ -4535,784 +4622,523 @@ var glow = (function () {
             this.SCALE = 1;
             this.events = {};
         },
-
         destroyCommon() {
             this.DESTROYED = true;
             this.events = null;
         },
-
-        scheduledUpdate(a, t) {
-
-            if (!this.PLAY) return;
-
-            this.time += t * this.SCALE;
-
-            if (this.run(this.time)) {
-                spark.queueUpdate(this);
-            } else if (this.REPEAT) {
-                let scale = this.SCALE;
-
-                this.REPEAT--;
-
-                if (this.SHUTTLE)
-                    scale = -scale;
-
-                let from = (scale > 0) ? 0 : this.duration;
-
-                this.play(scale, from);
-            } else
-                this.issueEvent("stopped");
-        },
-
-        await: async function() {
-            return this.observeStop()
-        },
-
-        async observeStop() {
-            return (new Promise(res => {
-
-                if (this.duration > 0)
-                    this.scheduledUpdate(0, 0);
-
-                if (this.duration < 1)
-                    return res();
-
-                this.addEventListener("stopped", () => (res(), false));
-            }));
-        },
-
-        shuttle(SHUTTLE = true) {
-            this.SHUTTLE = !!SHUTTLE;
-            return this;
-        },
-
-        set(i) {
-            if (i >= 0)
-                this.run(i * this.duration);
-            else
-                this.run(this.duration - i * this.duration);
-            return this;
-        },
-
-        step(i) { return this.set(i) },
-
-        play(scale = 1, from = 0) {
-            this.PLAY = true;
-            this.SCALE = scale;
-            this.time = from;
-            spark.queueUpdate(this);
-            this.issueEvent("started");
-            return this;
-        },
-
-        async asyncPlay(scale, from, fn) {
-
-            this.play(scale, from);
-
-            return this.observeStop(fn);
-        },
-
-        stop() {
-            //There may be a need to kill any existing CSS based animations
-            this.PLAY = false;
-            return this;
-        },
-
-        repeat(count = 1) {
-            this.REPEAT = Math.max(0, parseFloat(count));
-            return this;
-        },
-
-        issueEvent(event) {
-            if (this.events[event])
-                this.events[event] = this.events[event].filter(e => e(this) !== false);
-        },
-
-        addEventListener(event, listener) {
-            if (typeof(listener) === "function") {
-                if (!this.events[event])
-                    this.events[event] = [];
-                this.events[event].push(listener);
-            }
-        },
-
-        removeEventListener(event, listener) {
-            if (typeof(listener) === "function") {
-                const events = this.events[event];
-                if (events)
-                    for (let i = 0; i < events.length; i++)
-                        if (events[i] === listener)
-                            return (events.splice(i, 1), true);
-            }
-            return false;
-        }
     };
+    //# sourceMappingURL=common_methods.js.map
 
-    const 
-        CSS_Length$1 = types$1.length,
-        CSS_Percentage$1 = types$1.percentage,
-        CSS_Color$1 = types$1.color,
-        CSS_Transform2D$1 = types$1.transform2D,
-        CSS_Bezier$1 = types$1.cubic_bezier,
-        Animation = (function anim() {
-
-            var USE_TRANSFORM = false;
-
-            const
-                CSS_STYLE = 0,
-                JS_OBJECT = 1,
-                SVG = 3;
-
-            function setType(obj) {
-                if (obj instanceof HTMLElement) {
-                    if (obj.tagName == "SVG")
-                        return SVG;
-                    return CSS_STYLE;
-                }
-                return JS_OBJECT;
+    const CSS_Length$1 = types$1.length, CSS_Percentage$1 = types$1.percentage, CSS_Color$1 = types$1.color, CSS_Transform2D$1 = types$1.transform2D, CSS_Bezier$1 = types$1.cubic_bezier, Animation = (function anim() {
+        var USE_TRANSFORM = false;
+        const CSS_STYLE = 0, JS_OBJECT = 1, SVG = 3;
+        function setType(obj) {
+            if (obj instanceof HTMLElement) {
+                if (obj.tagName == "SVG")
+                    return SVG;
+                return CSS_STYLE;
             }
-
-            const Linear = { getYatX: x => x, toString: () => "linear" };
-
-
-            // Class to linearly interpolate number.
-            class lerpNumber extends Number { lerp(to, t, from = 0) { return this + (to - this) * t; } copy(val) { return new lerpNumber(val); } }
-
-            class lerpNonNumeric {
-                constructor(v) { this.v = v; } lerp(to, t, from) {
-                    return from.v
-                }
-                copy(val) { return new lerpNonNumeric(val) }
+            return JS_OBJECT;
+        }
+        const Linear = { getYatX: x => x, toString: () => "linear" };
+        // Class to linearly interpolate number.
+        class lerpNumber extends Number {
+            lerp(to, t, from = 0) { return this + (to - this) * t; }
+            copy(val) { return new lerpNumber(val); }
+        }
+        class lerpNonNumeric {
+            constructor(v) { this.v = v; }
+            lerp(to, t, from) {
+                return from.v;
             }
-
-
-            // Store animation data for a single property on a single object. Hosts methods that can create CSS based interpolation and regular JS property animations. 
-            class AnimProp {
-
-                constructor(keys, obj, prop_name, type) {
-                    this.duration = 0;
-                    this.end = false;
-                    this.keys = [];
-                    this.current_val = null;
-
-                    const
-                        IS_ARRAY = Array.isArray(keys),
-                        k0 = IS_ARRAY ? keys[0] : keys,
-                        k0_val = typeof(k0.value) !== "undefined" ? k0.value : k0.v;
-
-                    if (prop_name == "transform")
-                        this.type = CSS_Transform2D$1;
-                    else
-                        this.type = this.getType(k0_val);
-
-                    this.getValue(obj, prop_name, type, k0_val);
-
-                    let p = this.current_val;
-
-                    if (IS_ARRAY)
-                        keys.forEach(k => p = this.addKey(k, p));
-                    else
-                        this.addKey(keys, p);
-                }
-
-                destroy() {
-                    this.keys = null;
-                    this.type = null;
-                    this.current_val = null;
-                }
-
-                getValue(obj, prop_name, type, k0_val) {
-
-                    if (type == CSS_STYLE) {
-                        let name = prop_name.replace(/[A-Z]/g, (match) => "-" + match.toLowerCase());
-                        let cs = window.getComputedStyle(obj);
-
-                        //Try to get computed value. If it does not exist, then get value from the style attribtute.
-                        let value = cs.getPropertyValue(name);
-
-                        if (!value)
-                            value = obj.style[prop_name];
-
-
-                        if (this.type == CSS_Percentage$1) {
-                            if (obj.parentElement) {
-                                let pcs = window.getComputedStyle(obj.parentElement);
-                                let pvalue = pcs.getPropertyValue(name);
-                                let ratio = parseFloat(value) / parseFloat(pvalue);
-                                value = (ratio * 100);
-                            }
-                        }
-                        this.current_val = (new this.type(value));
-
-                    } else {
-                        this.current_val = new this.type(obj[prop_name]);
-                    }
-                }
-
-                getType(value) {
-
-                    switch (typeof(value)) {
-                        case "number":
-                            return lerpNumber;
-                        case "string":
-                            if (CSS_Length$1._verify_(value))
-                                return CSS_Length$1;
-                            if (CSS_Percentage$1._verify_(value))
-                                return CSS_Percentage$1;
-                            if (CSS_Color$1._verify_(value))
-                                return CSS_Color$1;
-                            //intentional
-                        case "object":
-                            return lerpNonNumeric;
-                    }
-                }
-
-                addKey(key, prev) {
-                    let
-                        l = this.keys.length,
-                        pkey = this.keys[l - 1],
-                        v = (key.value !== undefined) ? key.value : key.v,
-                        own_key = {
-                            val: (prev) ? prev.copy(v) : new this.type(v) || 0,
-                            dur: key.duration || key.dur || 0,
-                            del: key.delay || key.del || 0,
-                            ease: key.easing || key.e || ((pkey) ? pkey.ease : Linear),
-                            len: 0
-                        };
-
-                    own_key.len = own_key.dur + own_key.del;
-
-                    this.keys.push(own_key);
-
-                    this.duration += own_key.len;
-
-                    return own_key.val;
-                }
-
-                getValueAtTime(time = 0) {
-                    let val_start = this.current_val,
-                        val_end = this.current_val,
-                        key, val_out = val_start;
-
-
-                    for (let i = 0; i < this.keys.length; i++) {
-                        key = this.keys[i];
-                        val_end = key.val;
-                        if (time < key.len) {
-                            break;
-                        } else
-                            time -= key.len;
-                        val_start = key.val;
-                    }
-
-
-                    if (key) {
-                        if (time < key.len) {
-                            if (time < key.del) {
-                                val_out = val_start;
-                            } else {
-                                let x = (time - key.del) / key.dur;
-                                let s = key.ease.getYatX(x);
-                                val_out = val_start.lerp(val_end, s, val_start);
-                            }
-                        } else {
-                            val_out = val_end;
+            copy(val) { return new lerpNonNumeric(val); }
+        }
+        // Store animation data for a single property on a single object. Hosts methods that can create CSS based interpolation and regular JS property animations. 
+        class AnimProp {
+            constructor(keys, obj, prop_name, type) {
+                this.duration = 0;
+                this.end = false;
+                this.keys = [];
+                this.current_val = null;
+                const IS_ARRAY = Array.isArray(keys), k0 = IS_ARRAY ? keys[0] : keys, k0_val = typeof (k0.value) !== "undefined" ? k0.value : k0.v;
+                if (prop_name == "transform")
+                    this.type = CSS_Transform2D$1;
+                else
+                    this.type = this.getType(k0_val);
+                this.getValue(obj, prop_name, type, k0_val);
+                let p = this.current_val;
+                if (IS_ARRAY)
+                    keys.forEach(k => p = this.addKey(k, p));
+                else
+                    this.addKey(keys, p);
+            }
+            destroy() {
+                this.keys = null;
+                this.type = null;
+                this.current_val = null;
+            }
+            getValue(obj, prop_name, type, k0_val) {
+                if (type == CSS_STYLE) {
+                    let name = prop_name.replace(/[A-Z]/g, (match) => "-" + match.toLowerCase());
+                    let cs = window.getComputedStyle(obj);
+                    //Try to get computed value. If it does not exist, then get value from the style attribtute.
+                    let value = parseFloat(cs.getPropertyValue(name));
+                    if (!value)
+                        value = parseFloat(obj.style[prop_name]);
+                    if (this.type == CSS_Percentage$1) {
+                        if (obj.parentElement) {
+                            const pcs = window.getComputedStyle(obj.parentElement), pvalue = parseFloat(pcs.getPropertyValue(name)), ratio = value / parseFloat(pvalue);
+                            value = (ratio * 100);
                         }
                     }
-
-                    return val_out;
+                    this.current_val = (new this.type(value));
                 }
-
-                run(obj, prop_name, time, type) {
-                    const val_out = this.getValueAtTime(time);
-                    this.setProp(obj, prop_name, val_out, type);
-                    return time < this.duration;
-                }
-
-                setProp(obj, prop_name, value, type) {
-                    if (type == CSS_STYLE) {
-                        obj.style[prop_name] = value;
-                    } else
-                        obj[prop_name] = value;
-                }
-
-                unsetProp(obj, prop_name) {
-                    this.setProp(obj, prop_name, "", CSS_STYLE);
-                }
-
-                toCSSString(time = 0, prop_name = "") {
-                    const value = this.getValueAtTime(time);
-                    return `${prop_name}:${value.toString()}`;
+                else {
+                    this.current_val = new this.type(obj[prop_name]);
                 }
             }
-
-            // Stores animation data for a group of properties. Defines delay and repeat.
-            class AnimSequence {
-
-                constructor(obj, props) {
-                    this.constructCommon();
-                    this.obj = null;
-                    this.type = setType(obj);
-                    this.CSS_ANIMATING = false;
-
-                    switch (this.type) {
-                        case CSS_STYLE:
-                            this.obj = obj;
-                            break;
-                        case SVG:
-                        case JS_OBJECT:
-                            this.obj = obj;
-                            break;
+            getType(value) {
+                switch (typeof (value)) {
+                    case "number":
+                        return lerpNumber;
+                    case "string":
+                        if (CSS_Length$1._verify_(value))
+                            return CSS_Length$1;
+                        if (CSS_Percentage$1._verify_(value))
+                            return CSS_Percentage$1;
+                        if (CSS_Color$1._verify_(value))
+                            return CSS_Color$1;
+                    //intentional
+                    case "object":
+                        return lerpNonNumeric;
+                }
+            }
+            addKey(key, prev) {
+                let l = this.keys.length, pkey = this.keys[l - 1], v = (key.value !== undefined) ? key.value : key.v, own_key = {
+                    val: (prev) ? prev.copy(v) : new this.type(v) || 0,
+                    dur: key.duration || key.dur || 0,
+                    del: key.delay || key.del || 0,
+                    ease: key.easing || key.e || ((pkey) ? pkey.ease : Linear),
+                    len: 0
+                };
+                own_key.len = own_key.dur + own_key.del;
+                this.keys.push(own_key);
+                this.duration += own_key.len;
+                return own_key.val;
+            }
+            getValueAtTime(time = 0) {
+                let val_start = this.current_val, val_end = this.current_val, key, val_out = val_start;
+                for (let i = 0; i < this.keys.length; i++) {
+                    key = this.keys[i];
+                    val_end = key.val;
+                    if (time < key.len) {
+                        break;
                     }
-
-                    this.props = {};
-                    this.setProps(props);
+                    else
+                        time -= key.len;
+                    val_start = key.val;
                 }
-
-                destroy() {
-                    for (let name in this.props)
-                        if (this.props[name])
-                            this.props[name].destroy();
-                    this.obj = null;
-                    this.props = null;
-                    this.destroyCommon();
-                }
-
-                // Removes AnimProps based on object of keys that should be removed from this sequence.
-                removeProps(props) {
-                    if (props instanceof AnimSequence)
-                        props = props.props;
-
-                    for (let name in props) {
-                        if (this.props[name])
-                            this.props[name] = null;
+                if (key) {
+                    if (time < key.len) {
+                        if (time < key.del) {
+                            val_out = val_start;
+                        }
+                        else {
+                            let x = (time - key.del) / key.dur;
+                            let s = key.ease.getYatX(x);
+                            val_out = val_start.lerp(val_end, s, val_start);
+                        }
+                    }
+                    else {
+                        val_out = val_end;
                     }
                 }
-
-
-                unsetProps(props) {
-                    for (let name in this.props)
-                        this.props[name].unsetProp(this.obj, name);
+                return val_out;
+            }
+            run(obj, prop_name, time, type) {
+                const val_out = this.getValueAtTime(time);
+                this.setProp(obj, prop_name, val_out, type);
+                return time < this.duration;
+            }
+            setProp(obj, prop_name, value, type) {
+                if (type == CSS_STYLE) {
+                    obj.style[prop_name] = value;
                 }
-
-                setProps(props) {
-                    for (let name in this.props)
+                else
+                    obj[prop_name] = value;
+            }
+            unsetProp(obj, prop_name) {
+                this.setProp(obj, prop_name, "", CSS_STYLE);
+            }
+            toCSSString(time = 0, prop_name = "") {
+                const value = this.getValueAtTime(time);
+                return `${prop_name}:${value.toString()}`;
+            }
+        }
+        // Stores animation data for a group of properties. Defines delay and repeat.
+        class AnimSequence {
+            constructor(obj, props) {
+                //@ts-ignore
+                this.constructCommon();
+                this.obj = null;
+                this.type = setType(obj);
+                this.CSS_ANIMATING = false;
+                switch (this.type) {
+                    case CSS_STYLE:
+                        this.obj = obj;
+                        break;
+                    case SVG:
+                    case JS_OBJECT:
+                        this.obj = obj;
+                        break;
+                }
+                this.props = {};
+                this.setProps(props);
+            }
+            destroy() {
+                for (let name in this.props)
+                    if (this.props[name])
                         this.props[name].destroy();
-
-                    this.props = {};
-
-                    for (let name in props)
-                        this.configureProp(name, props[name]);
+                this.obj = null;
+                this.props = null;
+                //@ts-ignore
+                this.destroyCommon();
+            }
+            // Removes AnimProps based on object of keys that should be removed from this sequence.
+            removeProps(props) {
+                if (props instanceof AnimSequence)
+                    props = props.props;
+                for (let name in props) {
+                    if (this.props[name])
+                        this.props[name] = null;
                 }
-
-                configureProp(name, keys) {
-                    let prop;
-                    if (prop = this.props[name]) {
-                        this.duration = Math.max(prop.duration || prop.dur, this.duration);
-                    } else {
-                        prop = new AnimProp(keys, this.obj, name, this.type);
-                        this.props[name] = prop;
-                        this.duration = Math.max(prop.duration || prop.dur, this.duration);
-                    }
+            }
+            unsetProps(props) {
+                for (let name in this.props)
+                    this.props[name].unsetProp(this.obj, name);
+            }
+            setProps(props) {
+                for (let name in this.props)
+                    this.props[name].destroy();
+                this.props = {};
+                for (let name in props)
+                    this.configureProp(name, props[name]);
+            }
+            configureProp(name, keys) {
+                let prop;
+                if (prop = this.props[name]) {
+                    this.duration = Math.max(prop.duration || prop.dur, this.duration);
                 }
-
-                run(i) {
-
-                    for (let n in this.props) {
-                        let prop = this.props[n];
-                        if (prop)
-                            prop.run(this.obj, n, i, this.type);
-                    }
-
-                    return (i <= this.duration && i >= 0);
+                else {
+                    prop = new AnimProp(keys, this.obj, name, this.type);
+                    this.props[name] = prop;
+                    this.duration = Math.max(prop.duration || prop.dur, this.duration);
                 }
-
-
-                toCSSString(keyfram_id) {
-
-                    const strings = [`.${keyfram_id}{animation:${keyfram_id} ${this.duration}ms ${Animation.ease_out.toString()}}`, `@keyframes ${keyfram_id}{`];
-
-                    // TODO: Use some function to determine the number of steps that should be taken
-                    // This should reflect the different keyframe variations that can occure between
-                    // properties.
-                    // For now, just us an arbitrary number
-
-                    const len = 2;
-                    const len_m_1 = len - 1;
-                    for (let i = 0; i < len; i++) {
-
-                        strings.push(`${Math.round((i/len_m_1)*100)}%{`);
-
-                        for (let name in this.props)
-                            strings.push(this.props[name].toCSSString((i / len_m_1) * this.duration, name.replace(/([A-Z])/g, (match, p1) => "-" + match.toLowerCase())) + ";");
-
-                        strings.push("}");
-                    }
-
+            }
+            run(i) {
+                for (let n in this.props) {
+                    let prop = this.props[n];
+                    if (prop)
+                        prop.run(this.obj, n, i, this.type);
+                }
+                return (i <= this.duration && i >= 0);
+            }
+            toCSSString(keyfram_id) {
+                const strings = [`.${keyfram_id}{animation:${keyfram_id} ${this.duration}ms ${Animation.ease_out.toString()}}`, `@keyframes ${keyfram_id}{`];
+                // TODO: Use some function to determine the number of steps that should be taken
+                // This should reflect the different keyframe variations that can occure between
+                // properties.
+                // For now, just us an arbitrary number
+                const len = 2, len_m_1 = len - 1;
+                for (let i = 0; i < len; i++) {
+                    strings.push(`${Math.round((i / len_m_1) * 100)}%{`);
+                    for (let name in this.props)
+                        strings.push(this.props[name]
+                            .toCSSString((i / len_m_1) * this.duration, name.replace(/([A-Z])/g, (match, p1) => "-" + match.toLowerCase())) + ";");
                     strings.push("}");
-
-                    return strings.join("\n");
                 }
-
-                beginCSSAnimation() {
-                    if (!this.CSS_ANIMATING) {
-
-                        const anim_class = "class" + ((Math.random() * 10000) | 0);
-                        this.CSS_ANIMATING = anim_class;
-
-                        this.obj.classList.add(anim_class);
-                        let style = document.createElement("style");
-                        style.innerHTML = this.toCSSString(anim_class);
-                        document.head.appendChild(style);
-                        this.style = style;
-
-                        setTimeout(this.endCSSAnimation.bind(this), this.duration);
-                    }
-                }
-
-                endCSSAnimation() {
-                    if (this.CSS_ANIMATING) {
-                        this.obj.classList.remove(this.CSS_ANIMATING);
-                        this.CSS_ANIMATING = "";
-                        this.style.parentElement.removeChild(this.style);
-                        this.style = null;
-                    }
+                strings.push("}");
+                return strings.join("\n");
+            }
+            beginCSSAnimation() {
+                if (!this.CSS_ANIMATING) {
+                    const anim_class = "class" + ((Math.random() * 10000) | 0);
+                    this.CSS_ANIMATING = !!anim_class;
+                    this.obj.classList.add(anim_class);
+                    let style = document.createElement("style");
+                    style.innerHTML = this.toCSSString(anim_class);
+                    document.head.appendChild(style);
+                    this.style = style;
+                    setTimeout(this.endCSSAnimation.bind(this), this.duration);
                 }
             }
-
-
-            class AnimGroup {
-
-                constructor(sequences) {
-
-                    this.constructCommon();
-                    this.seq = [];
-                    for (const seq of sequences)
-                        this.add(seq);
-                }
-
-                destroy() {
-                    this.seq.forEach(seq => seq.destroy());
-                    this.seq = null;
-                    this.destroyCommon();
-                }
-
-                add(seq) {
-                    this.seq.push(seq);
-                    this.duration = Math.max(this.duration, seq.duration);
-                }
-
-                run(t) {
-                    for (let i = 0, l = this.seq.length; i < l; i++) {
-                        let seq = this.seq[i];
-                        seq.run(t);
-                    }
-
-
-                    return (t < this.duration);
+            endCSSAnimation() {
+                if (this.CSS_ANIMATING) {
+                    this.obj.classList.remove(this.CSS_ANIMATING);
+                    this.CSS_ANIMATING = !!"";
+                    this.style.parentElement.removeChild(this.style);
+                    this.style = null;
                 }
             }
-
-            Object.assign(AnimGroup.prototype, common_methods);
-            Object.assign(AnimSequence.prototype, common_methods);
-
-            /** END SHARED METHODS **/
-
-            const GlowFunction = function(...args) {
-
-                const output = [];
-
-                for (let i = 0; i < args.length; i++) {
-                    let data = args[i];
-
-                    let obj = data.obj;
-
-                    if (obj) {
-
-
-                        let props = {};
-
-                        Object.keys(data).forEach(k => { if (!(({ obj: true, match: true, delay: true })[k])) props[k] = data[k]; });
-
-                        output.push(new AnimSequence(obj, props));
-                    }else console.error(`Glow animation was passed an undefined object.`);
+        }
+        class AnimGroup {
+            constructor(sequences) {
+                //@ts-ignore
+                this.constructCommon();
+                this.seq = [];
+                for (const seq of sequences)
+                    this.add(seq);
+            }
+            destroy() {
+                this.seq.forEach(seq => seq.destroy());
+                this.seq = null;
+                //@ts-ignore
+                this.destroyCommon();
+            }
+            add(seq) {
+                this.seq.push(seq);
+                this.duration = Math.max(this.duration, seq.duration);
+            }
+            run(t) {
+                for (let i = 0, l = this.seq.length; i < l; i++) {
+                    let seq = this.seq[i];
+                    seq.run(t);
                 }
+                return (t < this.duration);
+            }
+        }
+        Object.assign(AnimGroup.prototype, common_methods);
+        Object.assign(AnimSequence.prototype, common_methods);
+        /** END SHARED METHODS **/
+        const GlowFunction = function (...args) {
+            const output = [];
+            for (let i = 0; i < args.length; i++) {
+                let data = args[i];
+                let obj = data.obj;
+                if (obj) {
+                    let props = {};
+                    Object.keys(data).forEach(k => { if (!(({ obj: true, match: true, delay: true })[k]))
+                        props[k] = data[k]; });
+                    output.push(new AnimSequence(obj, props));
+                }
+                else
+                    console.error(`Glow animation was passed an undefined object.`);
+            }
+            if (args.length > 1)
+                return (new AnimGroup(output));
+            return output.pop();
+        };
+        Object.assign(GlowFunction, {
+            createSequence: GlowFunction,
+            createGroup: (...rest) => new AnimGroup(rest),
+            set USE_TRANSFORM(v) { USE_TRANSFORM = !!v; },
+            get USE_TRANSFORM() { return USE_TRANSFORM; },
+            linear: Linear,
+            ease: new CSS_Bezier$1(0.25, 0.1, 0.25, 1),
+            ease_in: new CSS_Bezier$1(0.42, 0, 1, 1),
+            ease_out: new CSS_Bezier$1(0.2, 0.8, 0.3, 0.99),
+            ease_in_out: new CSS_Bezier$1(0.42, 0, 0.58, 1),
+            overshoot: new CSS_Bezier$1(0.2, 1.5, 0.2, 0.8),
+            anticipate: new CSS_Bezier$1(0.5, -0.5, 0.5, 0.8),
+            custom: (x1, y1, x2, y2) => new CSS_Bezier$1(x1, y1, x2, y2)
+        });
+        return GlowFunction;
+    })();
+    //# sourceMappingURL=animation.js.map
 
-                if (args.length > 1)
-                    return (new AnimGroup(output));
-
-                return output.pop();
-            };
-
-            Object.assign(GlowFunction, {
-
-                createSequence: GlowFunction,
-
-                createGroup: function(...rest) {
-                    let group = new AnimGroup;
-                    rest.forEach(seq => group.add(seq));
-                    return group;
-                },
-
-                set USE_TRANSFORM(v) { USE_TRANSFORM = !!v; },
-                get USE_TRANSFORM() { return USE_TRANSFORM; },
-
-                linear: Linear,
-                ease: new CSS_Bezier$1(0.25, 0.1, 0.25, 1),
-                ease_in: new CSS_Bezier$1(0.42, 0, 1, 1),
-                ease_out: new CSS_Bezier$1(0.2, 0.8, 0.3, 0.99),
-                ease_in_out: new CSS_Bezier$1(0.42, 0, 0.58, 1),
-                overshoot: new CSS_Bezier$1(0.2, 1.5, 0.2, 0.8),
-                anticipate: new CSS_Bezier$1(0.5, -0.5, 0.5, 0.8),
-                custom: (x1, y1, x2, y2) => new CSS_Bezier$1(x1, y1, x2, y2)
-            });
-
-            return GlowFunction;
-        })();
-
-    function setTo(to, seq, duration, easing, from){
-
+    function setTo(to, seq, duration, easing, from) {
         const cs = window.getComputedStyle(to, null);
         const rect = to.getBoundingClientRect();
         const from_rect = from.getBoundingClientRect();
-
         let to_width = cs.getPropertyValue("width");
         let to_height = cs.getPropertyValue("height");
         let margin_left = parseFloat(cs.getPropertyValue("margin-left"));
         let to_bgc = cs.getPropertyValue("background-color");
         let to_c = cs.getPropertyValue("color");
         const pos = cs.getPropertyValue("position");
-
         /* USING TRANSFORM */
-
         //Use width and height a per
-
         {
             ////////////////////// LEFT ////////////////////// 
-
             const left = seq.props.left;
             let start_left = 0, final_left = 0, abs_diff = 0;
-
             abs_diff = (left.keys[0].val - rect.left);
-
-            if(pos== "relative"){
+            if (pos == "relative") {
                 //get existing offset 
                 const left = parseFloat(cs.getPropertyValue("left")) || 0;
-
-                start_left = abs_diff +left;
+                start_left = abs_diff + left;
                 final_left = left;
-            }else{
+            }
+            else {
                 start_left = to.offsetLeft + abs_diff;
                 final_left = to.offsetLeft;
             }
-
             left.keys[0].val = new left.type(start_left, "px");
-            left.keys[1].val = new left.type(final_left,"px");
+            left.keys[1].val = new left.type(final_left, "px");
             left.keys[1].dur = duration;
             left.keys[1].len = duration;
             left.keys[1].ease = easing;
             left.duration = duration;
-
             ////////////////////// TOP ////////////////////// 
             const top = seq.props.top;
             let start_top = 0, final_top = 0;
-
             abs_diff = (top.keys[0].val - rect.top);
-
-            if(pos== "relative"){
-                 const top = parseFloat(cs.getPropertyValue("top")) || 0;
+            if (pos == "relative") {
+                const top = parseFloat(cs.getPropertyValue("top")) || 0;
                 start_top = abs_diff + top;
                 final_top = top;
-            }else{
+            }
+            else {
                 start_top = to.offsetTop + abs_diff;
                 final_top = to.offsetTop;
             }
-
             top.keys[0].val = new top.type(start_top, "px");
-            top.keys[1].val = new top.type(final_top,"px");
+            top.keys[1].val = new top.type(final_top, "px");
             top.keys[1].dur = duration;
             top.keys[1].len = duration;
             top.keys[1].ease = easing;
             top.duration = duration;
-
             ////////////////////// WIDTH ////////////////////// 
-
             seq.props.width.keys[0].val = new seq.props.width.type(to_width);
             seq.props.width.keys[0].dur = duration;
             seq.props.width.keys[0].len = duration;
             seq.props.width.keys[0].ease = easing;
             seq.props.width.duration = duration;
-
             ////////////////////// HEIGHT ////////////////////// 
-
             seq.props.height.keys[0].val = new seq.props.height.type(to_height);
             seq.props.height.keys[0].dur = duration;
-            seq.props.height.keys[0].len = duration; 
-            seq.props.height.keys[0].ease = easing; 
+            seq.props.height.keys[0].len = duration;
+            seq.props.height.keys[0].ease = easing;
             seq.props.height.duration = duration;
-
         }
-            to.style.transformOrigin = "top left";
-
+        to.style.transformOrigin = "top left";
         ////////////////////// BG COLOR ////////////////////// 
-
         seq.props.backgroundColor.keys[0].val = new seq.props.backgroundColor.type(to_bgc);
-        seq.props.backgroundColor.keys[0].dur = duration; 
-        seq.props.backgroundColor.keys[0].len = duration; 
-        seq.props.backgroundColor.keys[0].ease = easing; 
+        seq.props.backgroundColor.keys[0].dur = duration;
+        seq.props.backgroundColor.keys[0].len = duration;
+        seq.props.backgroundColor.keys[0].ease = easing;
         seq.props.backgroundColor.duration = duration;
-
         ////////////////////// COLOR ////////////////////// 
-
         seq.props.color.keys[0].val = new seq.props.color.type(to_c);
-        seq.props.color.keys[0].dur = duration; 
-        seq.props.color.keys[0].len = duration; 
-        seq.props.color.keys[0].ease = easing; 
+        seq.props.color.keys[0].dur = duration;
+        seq.props.color.keys[0].len = duration;
+        seq.props.color.keys[0].ease = easing;
         seq.props.color.duration = duration;
-
         seq.obj = to;
-
-
-
-        seq.addEventListener("stopped", ()=>{
+        seq.addEventListener("stopped", () => {
             seq.unsetProps();
         });
     }
-
     /**
-        Transform one element from another back to itself
-        @alias module:wick~internals.TransformTo
-    */
+     * Transforms the style of one element into the style of another, optionally removing
+     * the element that was transformed into.
+     *
+     * This is limited to style rules that can be numerically processed, such as
+     * top,left,right positions, width and height, and font size.
+     * @param element_from
+     * @param element_to
+     * @param duration
+     * @param easing
+     * @param HIDE_OTHER - Remove element_to after transformation is complete.
+     */
     function TransformTo(element_from, element_to, duration = 500, easing = Animation.linear, HIDE_OTHER = false) {
         let rect = element_from.getBoundingClientRect();
         let cs = window.getComputedStyle(element_from, null);
         let margin_left = parseFloat(cs.getPropertyValue("margin"));
-
         let seq = Animation.createSequence({
             obj: element_from,
             // /transform: [{value:"translate(0,0)"},{value:"translate(0,0)"}],
-            width: { value: "0px"},
-            height: { value: "0px"},
-            backgroundColor: { value: "rgb(1,1,1)"},
-            color: { value: "rgb(1,1,1)"},
-            left: [{value:rect.left+"px"},{ value: "0px"}],
-            top: [{value:rect.top+"px"},{ value: "0px"}]
+            width: { value: "0px" },
+            height: { value: "0px" },
+            backgroundColor: { value: "rgb(1,1,1)" },
+            color: { value: "rgb(1,1,1)" },
+            left: [{ value: rect.left + "px" }, { value: "0px" }],
+            top: [{ value: rect.top + "px" }, { value: "0px" }]
         });
-
         if (!element_to) {
-
-            let a = (seq) => (element_to, duration = 500, easing = Animation.linear,  HIDE_OTHER = false) => {
+            let a = (seq) => (element_to, duration = 500, easing = Animation.linear, HIDE_OTHER = false) => {
                 setTo(element_to, seq, duration, easing, element_from);
                 seq.duration = duration;
-            console.log(seq.toCSSString("MumboJumbo"));
+                console.log(seq.toCSSString("MumboJumbo"));
                 return seq;
             };
-
             return a(seq);
         }
-
         setTo(element_to, duration, easing, element_from);
         seq.duration = duration;
         return seq;
     }
+    //# sourceMappingURL=transformto.js.map
 
     const Transitioneer = (function () {
-
         let obj_map = new Map();
-
         function $in(...data) {
-
-            let
-                seq = null,
-                length = data.length,
-                delay = 0;
-
+            let seq = null, length = data.length, delay = 0;
             if (typeof (data[length - 1]) == "number")
                 delay = data[length - 1], length--;
-
             for (let i = 0; i < length; i++) {
                 let anim_data = data[i];
-
                 if (typeof (anim_data) == "object") {
-
                     if (anim_data.match && this.TT[anim_data.match]) {
-                        let
-                            duration = anim_data.duration,
-                            easing = anim_data.easing;
+                        let duration = anim_data.duration, easing = anim_data.easing;
                         seq = this.TT[anim_data.match](anim_data.obj, duration, easing);
-                    } else
+                    }
+                    else
                         seq = Animation.createSequence(anim_data);
-
                     //Parse the object and convert into animation props. 
                     if (seq) {
                         this.in_seq.push(seq);
                         this.in_duration = Math.max(this.in_duration, seq.duration);
                         if (this.OVERRIDE) {
-
                             if (obj_map.get(seq.obj)) {
                                 let other_seq = obj_map.get(seq.obj);
                                 other_seq.removeProps(seq);
                             }
-
                             obj_map.set(seq.obj, seq);
                         }
                     }
                 }
             }
-
             this.in_duration = Math.max(this.in_duration, parseInt(delay));
-
             return this.in;
         }
-
-
         function $out(...data) {
             //Every time an animating component is added to the Animation stack delay and duration need to be calculated.
             //The highest in_delay value will determine how much time is afforded before the animations for the in portion are started.
-            let
-                length = data.length,
-                delay = 0;
-
+            let length = data.length, delay = 0;
             if (typeof (data[length - 1]) == "number") {
                 if (typeof (data[length - 2]) == "number") {
                     in_delay = data[length - 2];
                     delay = data[length - 1];
                     length -= 2;
-                } else
+                }
+                else
                     delay = data[length - 1], length--;
             }
-
             for (let i = 0; i < length; i++) {
                 let anim_data = data[i];
-
                 if (typeof (anim_data) == "object") {
-
                     if (anim_data.match) {
                         this.TT[anim_data.match] = TransformTo(anim_data.obj);
-                    } else {
+                    }
+                    else {
                         let seq = Animation.createSequence(anim_data);
                         if (seq) {
                             this.out_seq.push(seq);
                             this.out_duration = Math.max(this.out_duration, seq.duration);
                             if (this.OVERRIDE) {
-
                                 if (obj_map.get(seq.obj)) {
                                     let other_seq = obj_map.get(seq.obj);
                                     other_seq.removeProps(seq);
                                 }
-
                                 obj_map.set(seq.obj, seq);
                             }
                         }
-
                         this.in_delay = Math.max(this.in_delay, parseInt(delay));
                     }
                 }
             }
         }
-
-
-
         class Transition {
             constructor(override = true) {
                 this.constructCommon();
@@ -5320,34 +5146,28 @@ var glow = (function () {
                 this.out_duration = 0;
                 // If set to zero transitions for out and in will happen simultaneously.
                 this.in_delay = 0;
-
                 this.in_seq = [];
                 this.out_seq = [];
-
                 this.TT = {};
-
+                //Final transition time is given by max(start_len+in_delay, end_len);\
+                ActiveTransition = this;
                 this.out = $out.bind(this);
                 this.out.addEventListener = this.addEventListener.bind(this);
                 this.out.removeEventListener = this.removeEventListener.bind(this);
-
                 this.in = $in.bind(this);
                 this.in.addEventListener = this.addEventListener.bind(this);
                 this.in.removeEventListener = this.removeEventListener.bind(this);
-
                 Object.defineProperty(this.out, "out_duration", {
                     get: () => this.out_duration
                 });
-
                 this.OVERRIDE = override;
             }
-
             destroy() {
                 let removeProps = function (seq) {
                     if (!seq.DESTROYED) {
                         if (obj_map.get(seq.obj) == seq)
                             obj_map.delete(seq.obj);
                     }
-
                     seq.destroy();
                 };
                 this.in_seq.forEach(removeProps);
@@ -5358,15 +5178,12 @@ var glow = (function () {
                 this.in = null;
                 this.destroyCommon();
             }
-
             get duration() {
                 return Math.max(this.in_duration + this.in_delay, this.out_duration);
             }
-
-            set duration(e) { };
-
+            set duration(e) { }
+            ;
             run(t) {
-
                 for (let i = 0; i < this.out_seq.length; i++) {
                     let seq = this.out_seq[i];
                     if (!seq.run(t) && !seq.FINISHED) {
@@ -5374,9 +5191,7 @@ var glow = (function () {
                         seq.FINISHED = true;
                     }
                 }
-
                 const in_t = Math.max(t - this.in_delay, 0);
-
                 for (let i = 0; i < this.in_seq.length; i++) {
                     let seq = this.in_seq[i];
                     if (!seq.run(t) && !seq.FINISHED) {
@@ -5384,23 +5199,20 @@ var glow = (function () {
                         seq.FINISHED = true;
                     }
                 }
-
                 return (t <= this.duration && t >= 0);
             }
         }
-
         Object.assign(Transition.prototype, common_methods);
-
-
-        return { createTransition: (OVERRIDE) => new Transition(OVERRIDE) };
+        return { createTransition: (OVERRIDE = false) => new Transition(OVERRIDE) };
     })();
+    //# sourceMappingURL=transitioneer.js.map
 
     Object.assign(Animation, {
-    	createTransition: (...args) => Transitioneer.createTransition(...args),
-    	transformTo: (...args) => TransformTo(...args)
+        createTransition: Transitioneer.createTransition,
+        transformTo: TransformTo
     });
-
     addModuleToCFW(Animation, "glow");
+    //# sourceMappingURL=glow.js.map
 
     return Animation;
 

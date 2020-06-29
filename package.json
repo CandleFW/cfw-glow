@@ -1,14 +1,15 @@
 {
   "name": "@candlefw/glow",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "Animation Library",
-  "main": "source/glow.js",
+  "main": "./build/library/glow.js",
+  "types": "./build/types/glow.d.ts",
   "type": "module",
   "scripts": {
     "test": "mocha test/test.js -r esm ",
     "test.watch": "mocha test/test.js -r esm --watch",
-    "build": "rollup --config ./build/config/main.config.js",
-    "build.watch": "rollup --config ./build/config/main.config.js --watch",
+    "build": "rollup --config ./source/config/rollup.config.js",
+    "build.watch": "rollup --config ./source/config/rollup.config.js --watch",
     "prepare": "npm run build"
   },
   "repository": {

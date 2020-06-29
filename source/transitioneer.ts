@@ -1,12 +1,10 @@
 import { Animation } from "./animation.js";
 import { TransformTo } from "./transformto.js";
-
 import common_methods from "./common_methods.js";
 
-const Transitioneer = (function () {
+export const Transitioneer = (function () {
 
     let obj_map = new Map();
-    let ActiveTransition = null;
 
     function $in(...data) {
 
@@ -182,7 +180,5 @@ const Transitioneer = (function () {
     Object.assign(Transition.prototype, common_methods);
 
 
-    return { createTransition: (OVERRIDE) => new Transition(OVERRIDE) };
+    return { createTransition: (OVERRIDE: boolean = false) => new Transition(OVERRIDE) };
 })();
-
-export { Transitioneer };

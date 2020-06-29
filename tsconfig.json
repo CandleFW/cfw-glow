@@ -1,0 +1,26 @@
+{
+  "compileOnSave": true,
+  "include": [
+    "./source/**/*"
+  ],
+  "compilerOptions": {
+    "types": [
+      "@types/node"
+    ],
+    "allowJs": true,
+    "baseUrl": "./",
+    "alwaysStrict": true,
+    "target": "ES2020",
+    "lib": [
+      "DOM",
+      "ES2020",
+    ],
+    "allowSyntheticDefaultImports": true,
+    "module": "ESNext",
+    "outDir": "./build/library",
+    "declarationDir": "./build/types",
+    "declaration": true,
+    "moduleResolution": "node",
+    "sourceMap": true
+  }
+}
