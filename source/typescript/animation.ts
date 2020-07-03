@@ -1,10 +1,9 @@
-import spark from "@candlefw/spark";
 import * as css from "@candlefw/css";
 
 import common_methods from "./common_methods.js";
 import { GlowAnimation } from "./types.js";
 
-
+const html_element = typeof (HTMLElement) !== "undefined" ? HTMLElement : class { };
 
 const
     CSS_Length = css.types.length,
@@ -24,11 +23,13 @@ const
             SVG = 3;
 
         function setType(obj) {
-            if (obj instanceof HTMLElement) {
-                if (obj.tagName == "SVG")
-                    return SVG;
+
+            if (obj instanceof html_element)
                 return CSS_STYLE;
-            }
+
+            if (obj instanceof SVGElement)
+                return SVG;
+
             return JS_OBJECT;
         }
 
@@ -88,32 +89,41 @@ const
             }
 
             getValue(obj, prop_name, type, k0_val) {
-
-                if (type == CSS_STYLE) {
-                    let name = prop_name.replace(/[A-Z]/g, (match) => "-" + match.toLowerCase());
-                    let cs = window.getComputedStyle(obj);
-
-                    //Try to get computed value. If it does not exist, then get value from the style attribtute.
-                    let value = parseFloat(cs.getPropertyValue(name));
-
-                    if (!value)
-                        value = parseFloat(obj.style[prop_name]);
-
-                    if (this.type == CSS_Percentage) {
-                        if (obj.parentElement) {
-
-                            const
-                                pcs = window.getComputedStyle(obj.parentElement),
-                                pvalue = parseFloat(pcs.getPropertyValue(name)),
-                                ratio = value / parseFloat(pvalue);
-
-                            value = (ratio * 100);
+                switch (type) {
+                    case SVG:
+                        if (obj instanceof SVGPathElement) {
+                            if (prop_name == "d") {
+                                this.type = CSS_Path;
+                                this.current_val = new this.type(k0_val);
+                            }
                         }
-                    }
-                    this.current_val = (new this.type(value));
+                        break;
+                    case CSS_STYLE:
+                        let name = prop_name.replace(/[A-Z]/g, (match) => "-" + match.toLowerCase());
+                        let cs = window.getComputedStyle(obj);
 
-                } else {
-                    this.current_val = new this.type(obj[prop_name]);
+                        //Try to get computed value. If it does not exist, then get value from the style attribtute.
+                        let value = parseFloat(cs.getPropertyValue(name));
+
+                        if (!value)
+                            value = parseFloat(obj.style[prop_name]);
+
+                        if (this.type == CSS_Percentage) {
+                            if (obj.parentElement) {
+
+                                const
+                                    pcs = window.getComputedStyle(obj.parentElement),
+                                    pvalue = parseFloat(pcs.getPropertyValue(name)),
+                                    ratio = value / parseFloat(pvalue);
+
+                                value = (ratio * 100);
+                            }
+                        }
+                        this.current_val = (new this.type(value));
+                        break;
+                    default:
+                        this.current_val = new this.type(obj[prop_name]);
+                        break;
                 }
             }
 
@@ -199,10 +209,16 @@ const
             }
 
             setProp(obj, prop_name, value, type) {
-                if (type == CSS_STYLE) {
-                    obj.style[prop_name] = value;
-                } else
-                    obj[prop_name] = value;
+                switch (type) {
+                    case CSS_STYLE:
+                        obj.style[prop_name] = value;
+                        break;
+                    case SVG:
+                        obj.setAttribute(prop_name, value.toString());
+                        break;
+                    default:
+                        obj[prop_name] = value;
+                }
             }
 
             unsetProp(obj, prop_name) {
@@ -416,18 +432,17 @@ const
                     let seq = this.seq[i];
                     seq.run(t);
                 }
-
-
                 return (t < this.duration);
             }
         }
 
         Object.assign(AnimGroup.prototype, common_methods);
+
         Object.assign(AnimSequence.prototype, common_methods);
 
-        /** END SHARED METHODS **/
+        /** END SHARED METHODS * */
 
-        const GlowFunction = function (...args) {
+        const GlowFunction = function (...args): GlowAnimation {
 
             const output = [];
 
@@ -447,8 +462,7 @@ const
                 } else console.error(`Glow animation was passed an undefined object.`);
             }
 
-            if (args.length > 1)
-                return (new AnimGroup(output));
+            if (args.length > 1) return <GlowAnimation><unknown>new AnimGroup(output);
 
             return output.pop();
         };
@@ -467,10 +481,10 @@ const
 
             ease: new CSS_Bezier(0.25, 0.1, 0.25, 1),
             ease_in: new CSS_Bezier(0.42, 0, 1, 1),
-            ease_out: new CSS_Bezier(0.2, 0.8, 0.3, 0.99),
+            ease_out: new CSS_Bezier(0, 0.8, 0.8, 1),
             ease_in_out: new CSS_Bezier(0.42, 0, 0.58, 1),
-            overshoot: new CSS_Bezier(0.2, 1.5, 0.2, 0.8),
-            anticipate: new CSS_Bezier(0.5, -0.5, 0.5, 0.8),
+            overshoot: new CSS_Bezier(5, 5, 0.2, 0.8),
+            anticipate: new CSS_Bezier(0.5, -0.1, 0.5, 0.8),
 
             custom: (x1, y1, x2, y2) => new CSS_Bezier(x1, y1, x2, y2)
         });

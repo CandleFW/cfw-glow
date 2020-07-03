@@ -2,6 +2,7 @@ import spark from "@candlefw/spark";
 
 import { AnimationMethods } from "./types";
 
+let i = 0;
 export default <AnimationMethods>{
 
     await: async function () {
@@ -34,7 +35,7 @@ export default <AnimationMethods>{
         return this;
     },
 
-    async asyncPlay(scale, from) {
+    asyncPlay(scale, from) {
 
         this.play(scale, from);
 
@@ -76,9 +77,8 @@ export default <AnimationMethods>{
             this.events[event] = this.events[event].filter(e => e(this) !== false);
     },
 
-    async observeStop() {
-        return (new Promise(res => {
-
+    observeStop(): Promise<null> {
+        return new Promise(res => {
             if (this.duration > 0)
                 this.scheduledUpdate(0, 0);
 
@@ -86,7 +86,7 @@ export default <AnimationMethods>{
                 return res();
 
             this.addEventListener("stopped", () => (res(), false));
-        }));
+        });
     },
 
     scheduledUpdate(a, t) {
@@ -96,6 +96,8 @@ export default <AnimationMethods>{
         this.time += t * this.SCALE;
 
         if (this.run(this.time)) {
+            if (i++ > 10000)
+                this.issueEvent("stopped");
             spark.queueUpdate(this);
         } else if (this.REPEAT) {
             let scale = this.SCALE;
@@ -108,8 +110,9 @@ export default <AnimationMethods>{
             let from = (scale > 0) ? 0 : this.duration;
 
             this.play(scale, from);
-        } else
+        } else {
             this.issueEvent("stopped");
+        }
     },
 
     constructCommon() {
