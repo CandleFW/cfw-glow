@@ -1,7 +1,7 @@
 {
   "compileOnSave": true,
   "include": [
-    "./source/**/*"
+    "./source/typescript/**/*"
   ],
   "compilerOptions": {
     "types": [
