@@ -112,7 +112,6 @@ export const Transitioneer = (function () {
 
             this.TT = {};
             //Final transition time is given by max(start_len+in_delay, end_len);\
-            ActiveTransition = this;
 
             this.out = $out.bind(this);
             this.out.addEventListener = this.addEventListener.bind(this);
