@@ -167,7 +167,6 @@ export function TransformTo(element_from, element_to, duration = 500, easing = A
         let a = (seq) => (element_to, duration = 500, easing = Animation.linear, HIDE_OTHER = false) => {
             setTo(element_to, seq, duration, easing, element_from);
             seq.duration = duration;
-            console.log(seq.toCSSString("MumboJumbo"));
             return seq;
         };
 
